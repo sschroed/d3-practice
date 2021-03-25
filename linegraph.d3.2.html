@@ -1,72 +1,119 @@
 <!DOCTYPE html>
-<html>
-   <head>
-      <script type = "text/javascript" src = "https://d3js.org/d3.v4.min.js"></script>
-      <style>
-         .line {
-            fill: none;
-            stroke: green;
-            stroke-width: 5px;
-         }
-      </style>
-   </head>
 
-   <body>
-      
+<head>
+    <meta charset="utf-8">
+    <title>Multi Line Chart</title>
+    <script type="text/javascript" src="https://d3js.org/d3.v5.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+</head>
 
-      <script language = "javascript">
-         // set the dimensions and margins of the graph
-         var margin = {top: 20, right: 20, bottom: 30, left: 50},
-         width = 960 - margin.left - margin.right,
-         height = 500 - margin.top - margin.bottom;
+<body>
+    <div id="container" class="svg-container"></div>
+    <script>
+    //------------------------1. PREPARATION------------------------//
+    //-----------------------------SVG------------------------------// 
+    const width = 960;
+    const height = 500;
+    const margin = 5;
+    const padding = 5;
+    const adj = 30;
+    // we are appending SVG first
+    const svg = d3.select("div#container").append("svg")
+        .attr("preserveAspectRatio", "xMinYMin meet")
+        .attr("viewBox", "-"
+              + adj + " -"
+              + adj + " "
+              + (width + adj *3) + " "
+              + (height + adj*3))
+        .style("padding", padding)
+        .style("margin", margin)
+        .classed("svg-content", true);
 
-         // set the ranges
-         var x = d3.scaleTime().range([0, width]);
-         var y = d3.scaleLinear().range([height, 0]);
+    //-----------------------------DATA-----------------------------//
+    const timeConv = d3.timeParse("%d-%b-%Y");
+    const dataset = d3.csv("data2.csv");
+    dataset.then(function(data) {
+        var slices = data.columns.slice(1).map(function(id) {
+            return {
+                id: id,
+                values: data.map(function(d){
+                    return {
+                        date: timeConv(d.date),
+                        measurement: +d[id]
+                    };
+                })
+            };
+        });
 
-         // define the line
-         var valueline = d3.line()
-            .x(function(d) { return x(d.year); })
-            .y(function(d) { return y(d.population); });
+    //----------------------------SCALES----------------------------//
+    const xScale = d3.scaleTime().range([0,width]);
+    const yScale = d3.scaleLinear().rangeRound([height, 0]);
+    xScale.domain(d3.extent(data, function(d){
+        return timeConv(d.date)}));
+    yScale.domain([(0), d3.max(slices, function(c) {
+        return d3.max(c.values, function(d) {
+            return d.measurement + 4; });
+            })
+        ]);
 
-         // append the svg obgect to the body of the page
-         // appends a 'group' element to 'svg'
-         // moves the 'group' element to the top left margin
-         var svg = d3.select("body").append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
-            .append("g").attr("transform",
-               "translate(" + margin.left + "," + margin.top + ")");
+    //-----------------------------AXES-----------------------------//
+    const yaxis = d3.axisLeft()
+        .ticks((slices[0].values).length)
+        .scale(yScale);
 
-         // Get the data
-         d3.csv("data.csv", function(error, data) {
+    const xaxis = d3.axisBottom()
+        .ticks(d3.timeDay.every(1))
+        .tickFormat(d3.timeFormat('%b %d'))
+        .scale(xScale);
 
-            if (error) throw error;
-            // format the data
-            data.forEach(function(d) {
-               d.year = d.year;
-               d.population = +d.population;
-            });
+    //----------------------------LINES-----------------------------//
+    const line = d3.line()
+        .x(function(d) { return xScale(d.date); })
+        .y(function(d) { return yScale(d.measurement); }); 
 
-            // Scale the range of the data
-            x.domain(d3.extent(data, function(d) { return d.year; }));
-            y.domain([0, d3.max(data, function(d) { return d.population; })]);
+    let id = 0;
+    const ids = function () {
+        return "line-"+id++;
+    }  
+    //-------------------------2. DRAWING---------------------------//
+    //-----------------------------AXES-----------------------------//
+    svg.append("g")
+        .attr("class", "axis")
+        .attr("transform", "translate(0," + height + ")")
+        .call(xaxis);
 
-            // Add the valueline path.
-            svg.append("path")
-               .data([data])
-               .attr("class", "line")
-               .attr("d", valueline);
+    svg.append("g")
+        .attr("class", "axis")
+        .call(yaxis)
+        .append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("dy", ".75em")
+        .attr("y", 6)
+        .style("text-anchor", "end")
+        .text("Frequency");
 
-            // Add the X Axis
-            svg.append("g")
-               .attr("transform", "translate(0," + height + ")")
-               .call(d3.axisBottom(x));
+    //----------------------------LINES-----------------------------//
+    const lines = svg.selectAll("lines")
+        .data(slices)
+        .enter()
+        .append("g");
 
-            // Add the Y Axis
-            svg.append("g")
-               .call(d3.axisLeft(y));
-         });
-      </script>
-   </body>
-</html>
+        lines.append("path")
+        .attr("class", ids)
+        .attr("d", function(d) { return line(d.values); });
+
+        lines.append("text")
+        .attr("class","serie_label")
+        .datum(function(d) {
+            return {
+                id: d.id,
+                value: d.values[d.values.length - 1]}; })
+        .attr("transform", function(d) {
+                return "translate(" + (xScale(d.value.date) + 10)  
+                + "," + (yScale(d.value.measurement) + 5 ) + ")"; })
+        .attr("x", 5)
+        .text(function(d) { return ("Serie ") + d.id; });
+
+    });
+    </script>
+</body>
